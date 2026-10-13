@@ -127,33 +127,36 @@ export class EngineSound {
         const offsetSec = firingOffsets[cyl] * cycleDuration;
         const pulseStartSample = cycleStartSample + Math.floor(offsetSec * sampleRate);
         const cylGain = cylinderGains[cyl % cylinderGains.length];
-        const pulseLenSamples = Math.min(numSamples - pulseStartSample, Math.floor(0.018 * sampleRate));
+        const pulseLenSamples = Math.min(numSamples - pulseStartSample, Math.floor(0.024 * sampleRate));
 
         for (let s = 0; s < pulseLenSamples; s++) {
           const idx = pulseStartSample + s;
           if (idx >= numSamples) break;
           const t = s / sampleRate;
 
-          // 1. Primary asymmetric pressure wave (sharp rise, expansion decay)
-          const tau1 = 0.0016;
+          // 1. Onda primaria de soplado asimétrico (expansión profunda de cámara de combustión)
+          const tau1 = 0.0028;
           const p1 = (t / tau1) * Math.exp(-t / tau1);
 
-          // 2. Deep acoustic runner low thump (68 Hz cavity resonance: visceral chest pressure)
-          const thump = Math.sin(2 * Math.PI * 68 * t) * Math.exp(-t / 0.012) * 0.75;
+          // 2. Retumbe visceral sub-grave (46 Hz: presión acústica masiva y profunda en el pecho)
+          const subThump = Math.sin(2 * Math.PI * 46 * t) * Math.exp(-t / 0.016) * 1.15;
 
-          // 3. Exhaust manifold secondary bounce (136 Hz)
-          const bounce = Math.sin(2 * Math.PI * 136 * t + 0.4) * Math.exp(-t / 0.008) * 0.40;
+          // 3. Resonancia grave de colectores de escape (92 Hz)
+          const lowManifold = Math.sin(2 * Math.PI * 92 * t + 0.3) * Math.exp(-t / 0.012) * 0.65;
 
-          // 4. Stochastic gas turbulence texture (filtered gas flow noise)
-          const noise = (Math.random() * 2 - 1) * Math.exp(-t / 0.005) * 0.12;
+          // 4. Tercer pulso de resonancia de gases (138 Hz)
+          const midRumble = Math.sin(2 * Math.PI * 138 * t + 0.6) * Math.exp(-t / 0.009) * 0.35;
 
-          data[idx] += cylGain * (p1 * 1.25 + thump + bounce + noise);
+          // 5. Grano mecánico de flujo turbulento de gases calientes
+          const noise = (Math.random() * 2 - 1) * Math.exp(-t / 0.005) * 0.10;
+
+          data[idx] += cylGain * (p1 * 1.45 + subThump + lowManifold + midRumble + noise);
         }
       }
     }
 
     this.applySeamlessLoopCrossfade(data, Math.floor(0.120 * sampleRate));
-    this.normalizeAudioData(data, 0.85);
+    this.normalizeAudioData(data, 0.88);
     return buffer;
   }
 
@@ -161,8 +164,8 @@ export class EngineSound {
    * Generates a 32-bit float high-definition PCM buffer of an F1 V12 exhaust screaming resonance.
    * Modelled on Formula 1 high-revving trumpet exhaust collector acoustics:
    * - 12 cylinders firing evenly every 60° (12 pulses per 720° cycle).
-   * - Harmonic trumpet overtones from multi-runner merge collectors.
-   * - Natural acoustic damping rolling off ultra-high harshness.
+   * - Harmonic trumpet overtones from multi-runner merge collectors con timbre lleno y oscuro.
+   * - Sin armónicos chirriantes artificiales.
    */
   private createF1ScreamerBuffer(ctx: AudioContext): AudioBuffer {
     const sampleRate = ctx.sampleRate;
@@ -181,7 +184,7 @@ export class EngineSound {
 
       for (let p = 0; p < pulsesPerCycle; p++) {
         const pulseStartSample = cycleStartSample + Math.floor(p * pulseIntervalSec * sampleRate);
-        const pulseLenSamples = Math.min(numSamples - pulseStartSample, Math.floor(0.012 * sampleRate));
+        const pulseLenSamples = Math.min(numSamples - pulseStartSample, Math.floor(0.014 * sampleRate));
         const bankFactor = (p % 2 === 0) ? 1.0 : 0.96;
 
         for (let s = 0; s < pulseLenSamples; s++) {
@@ -189,13 +192,12 @@ export class EngineSound {
           if (idx >= numSamples) break;
           const t = s / sampleRate;
 
-          // High-velocity exhaust merge pulses with tuned trumpet acoustic overtones
-          const p1 = Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t / 0.008);
-          const trumpet1 = Math.sin(2 * Math.PI * 400 * t) * Math.exp(-t / 0.006) * 0.65;
-          const trumpet2 = Math.sin(2 * Math.PI * 600 * t + 0.3) * Math.exp(-t / 0.004) * 0.35;
-          const highHowl = Math.sin(2 * Math.PI * 1200 * t + 0.6) * Math.exp(-t / 0.003) * 0.15;
+          // Colector de escape con afinación profunda: 130 Hz raíz, 260 Hz trompeta, 390 Hz tercer armónico
+          const p1 = Math.sin(2 * Math.PI * 130 * t) * Math.exp(-t / 0.010);
+          const trumpet1 = Math.sin(2 * Math.PI * 260 * t) * Math.exp(-t / 0.007) * 0.70;
+          const trumpet2 = Math.sin(2 * Math.PI * 390 * t + 0.3) * Math.exp(-t / 0.005) * 0.35;
 
-          data[idx] += bankFactor * (p1 + trumpet1 + trumpet2 + highHowl);
+          data[idx] += bankFactor * (p1 + trumpet1 + trumpet2);
         }
       }
     }
@@ -208,10 +210,9 @@ export class EngineSound {
   /**
    * Generates a 32-bit float high-definition PCM buffer of an authentic F1 straight-cut transmission gear whine.
    * Modelled on competition spur gear dog-box mechanics:
-   * - 28-tooth straight-cut spur gear meshing tone (933.3 Hz at 2000 RPM base).
-   * - Exactly 1680 integer tooth mesh cycles in 1.80s loop (zero pitch jitter or loop click).
-   * - Tooth engagement harmonics with subtle shaft rotation load envelope.
-   * - Pure, musical, intoxicating competition transmission whistle.
+   * - Frecuencia base grave de engranaje (373.33 Hz) para que al subir de vueltas no chille como ardillas.
+   * - Exactamente 672 ciclos enteros de contacto de dientes en 1.80s (cero clic de bucle).
+   * - Cuerpo subarmónico cálido y sedoso, sin componentes agudos metálicos chirriantes.
    */
   private createF1GearWhineBuffer(ctx: AudioContext): AudioBuffer {
     const sampleRate = ctx.sampleRate;
@@ -220,23 +221,23 @@ export class EngineSound {
     const buffer = ctx.createBuffer(1, numSamples, sampleRate);
     const data = buffer.getChannelData(0);
 
-    const fundamentalFreq = 933.3333; // 28 teeth * (2000 RPM / 60)
+    const fundamentalFreq = 373.3333; // 672 ciclos exactos en 1.80s (timbre grueso y sedoso F1)
 
     for (let i = 0; i < numSamples; i++) {
       const t = i / sampleRate;
       const phase = 2 * Math.PI * fundamentalFreq * t;
 
-      // 1. Pure straight-cut tooth contact tone (fundamental mesh)
-      const f1 = Math.sin(phase);
-      // 2. 2nd tooth profile harmonic (musical octave shimmer)
-      const f2 = Math.sin(2 * phase + 0.25) * 0.22;
-      // 3. 3rd tooth profile harmonic (metallic racing edge)
-      const f3 = Math.sin(3 * phase + 0.50) * 0.06;
+      // 1. Tono principal de engrane de dientes rectos
+      const f1 = Math.sin(phase) * 0.72;
+      // 2. Subarmónico de apoyo (da cuerpo y peso mecánico, elimina el tono fino de ardilla)
+      const fSub = Math.sin(0.5 * phase) * 0.24;
+      // 3. Segundo armónico sutil para brillo mecánico suave
+      const f2 = Math.sin(2 * phase + 0.30) * 0.08;
 
-      // 4. Subtle mechanical rotation tooth engagement load envelope (shaft rotation)
-      const shaftMod = 1.0 + 0.035 * Math.sin(2 * Math.PI * (2000 / 60) * t);
+      // 4. Modulación rotacional del eje de transmisión
+      const shaftMod = 1.0 + 0.03 * Math.sin(2 * Math.PI * (2000 / 60) * t);
 
-      data[i] = (f1 + f2 + f3) * shaftMod;
+      data[i] = (f1 + fSub + f2) * shaftMod;
     }
 
     this.applySeamlessLoopCrossfade(data, Math.floor(0.080 * sampleRate));
@@ -411,11 +412,11 @@ export class EngineSound {
 
       this.engineBusGain.connect(this.dcBlockFilter);
 
-      // Progressive engine low-pass filter (Corte acústico orgánico: 580 Hz en ralentí a 2800 Hz en corte)
-      // Cortar por encima de 2800 Hz elimina por completo los agudos digitales artificiales y el sonido a zumbador
+      // Progressive engine low-pass filter (Corte acústico orgánico: 420 Hz en ralentí a 1850 Hz en corte)
+      // Cortar por encima de 1850 Hz elimina por completo cualquier agudo fino de ardilla o zumbador digital
       this.engineFilter = this.ctx.createBiquadFilter();
       this.engineFilter.type = 'lowpass';
-      this.engineFilter.frequency.setValueAtTime(580, this.ctx.currentTime);
+      this.engineFilter.frequency.setValueAtTime(420, this.ctx.currentTime);
       this.engineFilter.Q.setValueAtTime(0.707, this.ctx.currentTime);
       this.engineFilter.connect(this.engineBusGain);
 
@@ -425,19 +426,19 @@ export class EngineSound {
       this.waveShaper.oversample = '2x';
       this.waveShaper.connect(this.engineFilter);
 
-      // Exhaust Manifold Formant Resonator (Dynamic peaking filter: 160 Hz en bajas -> 1260 Hz en altas)
+      // Exhaust Manifold Formant Resonator (Dynamic peaking filter: 110 Hz en bajas -> 780 Hz en altas)
       this.exhaustResonator = this.ctx.createBiquadFilter();
       this.exhaustResonator.type = 'peaking';
-      this.exhaustResonator.frequency.setValueAtTime(160, this.ctx.currentTime);
-      this.exhaustResonator.Q.setValueAtTime(1.6, this.ctx.currentTime);
-      this.exhaustResonator.gain.setValueAtTime(4.5, this.ctx.currentTime);
+      this.exhaustResonator.frequency.setValueAtTime(110, this.ctx.currentTime);
+      this.exhaustResonator.Q.setValueAtTime(1.5, this.ctx.currentTime);
+      this.exhaustResonator.gain.setValueAtTime(4.0, this.ctx.currentTime);
       this.exhaustResonator.connect(this.waveShaper);
 
-      // Body Thump Filter (LowShelf +6.0dB a 125Hz: Potencia y retumbe visceral del motor americano V8)
+      // Body Thump Filter (LowShelf +8.5dB a 80Hz: Sub-grave retumbante masivo y presencia física)
       this.bodyThumpFilter = this.ctx.createBiquadFilter();
       this.bodyThumpFilter.type = 'lowshelf';
-      this.bodyThumpFilter.frequency.setValueAtTime(125, this.ctx.currentTime);
-      this.bodyThumpFilter.gain.setValueAtTime(6.0, this.ctx.currentTime);
+      this.bodyThumpFilter.frequency.setValueAtTime(80, this.ctx.currentTime);
+      this.bodyThumpFilter.gain.setValueAtTime(8.5, this.ctx.currentTime);
       this.bodyThumpFilter.connect(this.exhaustResonator);
 
       // Combustion Sum Bus: Suma las pistas de escape y admisión antes de la saturación
@@ -445,13 +446,13 @@ export class EngineSound {
       this.combustionBus.gain.setValueAtTime(1.0, this.ctx.currentTime);
       this.combustionBus.connect(this.bodyThumpFilter);
 
-      // Whistle Filter dedicado: Bandpass que sigue la frecuencia de engranaje
+      // Whistle Filter dedicado: Bandpass centrado en la frecuencia de engranaje F1 (373 Hz)
       // IMPORTANTE: El silbido conecta DIRECTAMENTE a engineBusGain (NO pasa por waveShaper),
-      // aislando por completo la transmisión de la distorsión del escape (CERO interferencias o chispidos).
+      // manteniendo el silbido sedoso y libre de distorsiones ásperas.
       this.whistleFilter = this.ctx.createBiquadFilter();
       this.whistleFilter.type = 'bandpass';
-      this.whistleFilter.frequency.setValueAtTime(933, this.ctx.currentTime);
-      this.whistleFilter.Q.setValueAtTime(1.4, this.ctx.currentTime);
+      this.whistleFilter.frequency.setValueAtTime(373, this.ctx.currentTime);
+      this.whistleFilter.Q.setValueAtTime(2.2, this.ctx.currentTime);
 
       // Pre-render High-Definition 32-bit Float PCM Audio Buffers
       this.bufferBase = this.createMuscleCombustionBuffer(this.ctx);
@@ -562,9 +563,13 @@ export class EngineSound {
     // 1000 RPM idle: playbackRate = 0.50
     // 2000 RPM base: playbackRate = 1.00
     // 9500 RPM redline: playbackRate = 4.75
-    const targetPlaybackRate = Math.max(0.40, Math.min(4.8, rpm / 2000.0));
     const targetRpmNorm = Math.min(1.0, Math.max(0.0, (rpm - 1000) / (9500 - 1000)));
     const targetThrottleNorm = Math.min(1.0, Math.max(0.0, throttle));
+
+    // Afinación acústica profunda:
+    // En lugar de multiplicar hasta 4.8x (que producía un tono agudo de ardilla de juguete),
+    // se escala entre 0.38x (ralentí profundo y cavernoso) y 2.60x (aullido poderoso con pegada grave)
+    const targetPlaybackRate = 0.38 + Math.pow(targetRpmNorm, 1.05) * 2.22;
 
     if (this.lastAudioUpdateTimestamp === 0) {
       this.lastAudioUpdateTimestamp = now;
@@ -606,15 +611,17 @@ export class EngineSound {
         this.sourceV12.playbackRate.setTargetAtTime(dynamicRate, currentTime, 0.020);
       }
       if (this.sourceWhistle) {
-        // El silbido de transmisión sigue directamente el régimen del tren de potencia
-        this.sourceWhistle.playbackRate.setTargetAtTime(playbackRate, currentTime, 0.020);
+        // El silbido de transmisión sigue una curva sedosa y controlada (0.55x a 2.50x)
+        // manteniendo la frecuencia entre 200 Hz y 900 Hz, evitando tonos chillones de ardilla
+        const whistleRate = 0.55 + Math.pow(rpmNorm, 1.15) * 1.95;
+        this.sourceWhistle.playbackRate.setTargetAtTime(whistleRate, currentTime, 0.020);
+        if (this.whistleFilter) {
+          const whistleCenter = Math.min(2000, Math.max(200, 373.3 * whistleRate));
+          this.whistleFilter.frequency.setTargetAtTime(whistleCenter, currentTime, 0.020);
+        }
       }
       if (this.sourceIntake) {
         this.sourceIntake.playbackRate.setTargetAtTime(dynamicRate, currentTime, 0.020);
-      }
-      if (this.whistleFilter) {
-        const whistleCenter = Math.min(10000, Math.max(300, 933.0 * playbackRate));
-        this.whistleFilter.frequency.setTargetAtTime(whistleCenter, currentTime, 0.020);
       }
     }
 
@@ -622,27 +629,27 @@ export class EngineSound {
       this.lastAppliedRpmNorm = rpmNorm;
       this.lastAppliedThrottleNorm = throttleNorm;
 
-      // 1. Rugido Muscular Americano (Potente masa PCM cross-plane V8 en bajas y medias revoluciones):
+      // 1. Rugido Muscular y Profundo (Mayor ganancia y presencia grave en todo el rango):
       if (this.gainBase) {
         const baseVol = this.layersState.base
-          ? (0.42 * (1.0 - 0.20 * rpmNorm) + 0.14 * throttleCurve)
+          ? (0.52 * (1.0 - 0.15 * rpmNorm) + 0.18 * throttleCurve)
           : 0.0;
         this.gainBase.gain.setTargetAtTime(baseVol, currentTime, 0.020);
       }
 
-      // 2. Aullido F1 V12 (Muestras de escape de competición que se desatan en medias y altas):
+      // 2. Aullido F1 V12 (Armónicos de competición afinados sin estridencias agudas):
       if (this.gainV12) {
         const v12Vol = this.layersState.v12
-          ? (Math.pow(rpmNorm, 1.35) * (0.28 + 0.12 * throttleCurve))
+          ? (Math.pow(rpmNorm, 1.45) * (0.24 + 0.12 * throttleCurve))
           : 0.0;
         this.gainV12.gain.setTargetAtTime(Math.max(0.0, v12Vol), currentTime, 0.020);
       }
 
-      // 3. Silbido de Transmisión de Dientes Rectos F1 (aislado y sedoso, ligado a RPM y aceleración):
-      // Aúlla bajo par de aceleración transmitiendo la brutalidad mecánica de la caja de cambios
+      // 3. Silbido de Transmisión de Dientes Rectos F1 (cálido, sedoso y con cuerpo):
+      // Aúlla con carácter mecánico de competición sin el sonido fino de ardillas
       if (this.gainWhistle) {
         const whistleVol = this.layersState.whistle
-          ? (Math.pow(rpmNorm, 1.45) * (0.045 + 0.075 * throttleCurve))
+          ? (Math.pow(rpmNorm, 1.35) * (0.040 + 0.065 * throttleCurve))
           : 0.0;
         this.gainWhistle.gain.setTargetAtTime(Math.max(0.0, whistleVol), currentTime, 0.020);
       }
@@ -651,36 +658,36 @@ export class EngineSound {
       // Ruge al pisar el acelerador transmitiendo la garganta de aspiración
       if (this.gainIntake && this.intakeFilter) {
         const intakeVol = this.layersState.intake
-          ? (throttleCurve * (0.22 + 0.08 * rpmNorm))
+          ? (throttleCurve * (0.24 + 0.08 * rpmNorm))
           : 0.0;
         this.gainIntake.gain.setTargetAtTime(Math.max(0.0, intakeVol), currentTime, 0.020);
-        const targetIntakeFreq = 280 + rpmNorm * 520;
+        const targetIntakeFreq = 240 + rpmNorm * 440;
         this.intakeFilter.frequency.setTargetAtTime(targetIntakeFreq, currentTime, 0.020);
       }
 
-      // 5. Potencia Muscular Americana: Body Thump Filter (LowShelf +6.0dB en 125Hz):
-      // Aporta ese impacto acústico en el pecho a bajas revoluciones y con acelerador
+      // 5. Potencia Muscular y Sub-graves: Body Thump Filter (LowShelf +8.5dB a 80Hz):
+      // Máximo impacto y contundencia física de frecuencias bajas en el habitáculo
       if (this.bodyThumpFilter) {
-        const targetThumpGain = 6.0 - 3.5 * rpmNorm + 2.0 * throttleCurve;
+        const targetThumpGain = 8.5 - 3.0 * rpmNorm + 3.5 * throttleCurve;
         this.bodyThumpFilter.gain.setTargetAtTime(targetThumpGain, currentTime, 0.020);
       }
 
-      // 6. Resonador Formante de Escape:
-      // De 160 Hz en bajas (resonancia de colector) a 1260 Hz en altas (aullido F1)
+      // 6. Resonador Formante de Colectores de Escape:
+      // De 110 Hz en ralentí a 780 Hz en corte (resonancia de colector profunda)
       if (this.exhaustResonator) {
-        const targetResonance = 160 + rpmNorm * 1100;
+        const targetResonance = 110 + rpmNorm * 670;
         this.exhaustResonator.frequency.setTargetAtTime(targetResonance, currentTime, 0.020);
       }
 
       // 7. Smooth acoustic engine body low-pass filter:
-      // Cálido y pesado en ralentí (580 Hz), abre hasta 2800 Hz en corte.
-      // CORTA POR COMPLETO cualquier frecuencia artificial superior (> 2.8 kHz) para un sonido 100% orgánico.
+      // Cálido y pesado en ralentí (420 Hz), abre hasta 1850 Hz en corte.
+      // CORTA POR COMPLETO cualquier frecuencia artificial superior (> 1.85 kHz) para un sonido 100% orgánico y grave.
       if (this.engineFilter) {
         if (!this.layersState.engineFilter) {
           this.engineFilter.frequency.setTargetAtTime(20000, currentTime, 0.020);
         } else {
-          const minCutoff = 580;
-          const maxCutoff = 2800;
+          const minCutoff = 420;
+          const maxCutoff = 1850;
           const targetCutoff = minCutoff + (maxCutoff - minCutoff) * Math.pow(Math.max(throttleNorm, 0.35 * rpmNorm), 1.10);
           if (Math.abs(targetCutoff - this.lastAppliedCutoff) > 4.0) {
             this.lastAppliedCutoff = targetCutoff;
@@ -696,7 +703,7 @@ export class EngineSound {
       }
     }
 
-    // 9. Modulación Acústica del Chillido de Derrape Real (audio de neumático subido por el usuario)
+    // 9. Modulación Acústica del Chillido de Derrape Real (audio de neumático subido por el usuario: olenchic--110063.mp3)
     // Se activa suavemente en el umbral de pérdida de tracción y ruge al derrapar de costado
     const effectiveSlip = Math.max(slipRatio, isDrifting ? 0.45 : 0.0);
     const slipAlpha = 1.0 - Math.exp(-22.0 * dt);
@@ -711,11 +718,11 @@ export class EngineSound {
         const slipIntensity = Math.min(1.0, (this.smoothSlipRatio - 0.10) / 0.40);
         const speedIntensity = Math.min(1.0, (speedMs - 2.0) / 7.0);
 
-        // Curva progresiva con pegada y presencia en derrape profundo
-        targetSkidVol = Math.pow(slipIntensity, 1.15) * speedIntensity * 0.60;
+        // Curva con pegada y presencia en derrape profundo
+        targetSkidVol = Math.pow(slipIntensity, 1.10) * speedIntensity * 0.68;
 
-        // Modulación física suave y natural del pitch (0.92x a 1.08x) manteniendo la textura original
-        targetSkidPitch = 0.94 + 0.10 * slipIntensity + 0.04 * Math.min(1.0, speedMs / 25.0);
+        // Modulación natural manteniendo el carácter del audio original
+        targetSkidPitch = 0.95 + 0.08 * slipIntensity;
       }
 
       this.skidGain.gain.setTargetAtTime(targetSkidVol, currentTime, 0.025);
